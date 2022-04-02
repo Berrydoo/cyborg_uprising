@@ -6,7 +6,8 @@ class Context {
     int factoryCount;
     int linkCount;
     int entityCount;
-    List<Factory> factoryList;
+    List<Factory> enemyOrNeutralFactories;
+    List<Factory> myFactories;
     List<Troop> troopList;
     List<Link> links;
 }
@@ -16,10 +17,15 @@ class Link {
         this.factory1 = factory1;
         this.factory2 = factory2;
         this.distance = distance;
+        System.err.println(factory1 + " " + factory2 + " " + distance);
     }
     int factory1;
     int factory2;
     int distance;
+
+    public Integer getDistance(){
+        return this.distance;
+    }
 }
 
 class Entity {
@@ -27,11 +33,32 @@ class Entity {
     String type;
     int ownerCode;
     String owner;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Entity entity = (Entity) o;
+        return id == entity.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
 
 class Factory extends Entity {
     int numCyborgs;
     int factoryProduction;
+    List<Link> links;
+
+    public int getId(){
+        return this.id;
+    }
+    public int getNumCyborgs(){
+        return numCyborgs;
+    }
 }
 
 class Troop extends Entity {
@@ -44,11 +71,15 @@ class Troop extends Entity {
 class Constants {
 
     private Constants(){}
+    public static final String ME = "ME";
+    public static final String OPPONENT = "OPPONENT";
+    public static final String NEUTRAL = "NEUTRAL";
+    public static final String WAIT = "WAIT";
 
     static Map<Integer,String> ownerMap = Stream.of(
-                    new AbstractMap.SimpleEntry<>(1,"ME"),
-                    new AbstractMap.SimpleEntry<>(-1, "OPPONENT"),
-                    new AbstractMap.SimpleEntry<>(0, "NEUTRAL"))
+                    new AbstractMap.SimpleEntry<>(1,ME),
+                    new AbstractMap.SimpleEntry<>(-1, OPPONENT),
+                    new AbstractMap.SimpleEntry<>(0, NEUTRAL))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
 }
@@ -75,37 +106,94 @@ class EntityArguments {
 
 }
 
-class Player {
+class StrategyBuilder{
 
-    public static void main(String[] args) {
+    public Factory findFactoryWithMostCyborgs(List<Factory> factories){
+        if (factories.isEmpty()) throw new AssertionError("Factories collection is empty");
+        Factory mostCyborgs =  factories.stream()
+                .max(Comparator.comparing(Factory::getNumCyborgs))
+                .orElse(factories.get(0));
 
-            Scanner in = new Scanner(System.in);
-            Context context = createContext(in);
-            context.links = createLinks(context, in);
+        System.err.println("My factory with most cyborgs is: " + mostCyborgs.id + " which has " + mostCyborgs.numCyborgs + " borgs");
+        return mostCyborgs;
+    }
 
-            // game loop
-            while (in.hasNext() || in.hasNextInt()) {
-                context.entityCount = getEntityCount(in); // the number of entities (e.g. factories and troops)
-                context = getEntities(context, in);
+    public Factory findClosestFactory(Factory factory, List<Factory> myFactories, List<Factory> enemyFactories){
+        if(Objects.isNull(factory)) throw new AssertionError("Factory is null");
+        if (enemyFactories.isEmpty()) throw new AssertionError("Factories collection is empty");
 
-                // Any valid action, such as "WAIT" or "MOVE source destination cyborgs"
-                System.out.println(getAction(context));
-            }
+        List<Integer> myFactoryIds = myFactories.stream().map(Factory::getId).collect(Collectors.toList());
+        List<Link> linksToEnemies = factory.links.stream().filter( l -> !myFactoryIds.contains(l.factory1) || !myFactoryIds.contains(l.factory2) ).collect(Collectors.toList());
+
+        Link closestLink = linksToEnemies.stream()
+                .min( Comparator.comparing(Link::getDistance))
+                .orElse(factory.links.get(0));
+
+        System.err.println("Closest link to factory " + factory.id + " is " + closestLink.factory1 + " " + closestLink.factory2 + " " + closestLink.distance );
+
+        Factory closestEnemy = enemyFactories.stream()
+                .filter( f -> f.id == closestLink.factory1 || f.id == closestLink.factory2 )
+                .findFirst()
+                .orElse(enemyFactories.get(0));
+
+        System.err.println("Closest enemy factory to target is " + closestEnemy.id + " with a distance of " + closestLink.distance);
+        return closestEnemy;
+    }
+
+}
+
+class GameController {
+
+    private final Scanner in;
+    private Context context;
+
+    public GameController(Scanner in){
+        this.in = in;
+    }
+
+    public void run(){
+
+        this.context = createContext();
+        context.links = createLinks();
+        while (in.hasNext() || in.hasNextInt()) {
+            context.entityCount = getEntityCount();
+            getEntities();
+
+            System.out.println(getAction());
+        }
+    }
+
+
+    private String getAction(){
+
+        StrategyBuilder strategyBuilder = new StrategyBuilder();
+
+        if( context.myFactories.isEmpty()){
+            return Constants.WAIT;
+        }
+
+        Factory factory = strategyBuilder.findFactoryWithMostCyborgs(context.myFactories);
+        if( Objects.isNull(factory) || context.enemyOrNeutralFactories.isEmpty() ){
+            return Constants.WAIT;
+        }
+        Factory targetFactory = strategyBuilder.findClosestFactory(factory, context.myFactories, context.enemyOrNeutralFactories );
+
+        if( Objects.isNull(targetFactory)){
+            return Constants.WAIT;
+        } else {
+            return "MOVE " + factory.id + " " + targetFactory.id + " " +  Math.max(targetFactory.numCyborgs, 2);
+        }
 
     }
 
-    public static String getAction(Context context){
-        return "WAIT";
-    }
-
-    public static Context createContext(Scanner in){
-        Context context = new Context();
+    private Context createContext(){
+        this.context = new Context();
         context.factoryCount = in.nextInt();
         context.linkCount = in.nextInt();
         return context;
     }
 
-    public static List<Link> createLinks(Context context, Scanner in){
+    private List<Link> createLinks(){
         List<Link> links = new ArrayList<>(context.linkCount);
         for (int i = 0; i < context.linkCount; i++) {
             int factory1 = in.nextInt();
@@ -116,31 +204,36 @@ class Player {
         return links;
     }
 
-    public static int getEntityCount(Scanner in){
+    private int getEntityCount(){
         return in.nextInt();
     }
 
-    public static Context getEntities(Context context, Scanner in){
-        List<Factory> factories = new ArrayList<>();
+    private void getEntities(){
+        List<Factory> enemyOrNeutral = new ArrayList<>();
+        List<Factory> myFactories = new ArrayList<>();
         List<Troop> troops = new ArrayList<>();
 
-        for (int i = 0; i < context.entityCount; i++) {
-
+        for (int i = 0; i < this.context.entityCount; i++) {
             EntityArguments args = new EntityArguments(in.nextInt(),in.next(),in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt() );
 
             if ( isFactory(args.entityType)){
-                factories.add(createFactory(args));
+                Factory factory = createFactory(args);
+                factory.links = getLinksForFactory(factory.id);
+                if(factory.owner.equalsIgnoreCase(Constants.ME)){
+                    myFactories.add(factory);
+                } else {
+                    enemyOrNeutral.add(factory);
+                }
             } else if(isTroop(args.entityType)){
                 troops.add(createTroop(args));
             }
         }
-        context.factoryList = factories;
+        context.myFactories = myFactories;
+        context.enemyOrNeutralFactories = enemyOrNeutral;
         context.troopList = troops;
-
-        return context;
     }
 
-    private static Factory createFactory(EntityArguments args){
+    private Factory createFactory(EntityArguments args){
         Factory factory = new Factory();
         factory.id = args.entityId;
         factory.type = args.entityType;
@@ -151,7 +244,7 @@ class Player {
         return factory;
     }
 
-    private static Troop createTroop(EntityArguments args){
+    private Troop createTroop(EntityArguments args){
         Troop troop = new Troop();
         troop.id = args.entityId;
         troop.type = args.entityType;
@@ -164,10 +257,26 @@ class Player {
         return troop;
     }
 
-    private static boolean isFactory(String entityType){
+    private List<Link> getLinksForFactory(int factoryId){
+        return context.links.stream()
+                .filter( l -> l.factory1 == factoryId || l.factory2 == factoryId).collect(Collectors.toList());
+    }
+
+    private boolean isFactory(String entityType){
         return entityType.equalsIgnoreCase("FACTORY");
     }
-    private static boolean isTroop(String entityType){
+    private boolean isTroop(String entityType){
         return entityType.equalsIgnoreCase("TROOP");
     }
+}
+
+class Player {
+
+    public static void main(String[] args) {
+
+            Scanner in = new Scanner(System.in);
+            GameController controller = new GameController(in);
+            controller.run();
+    }
+
 }
