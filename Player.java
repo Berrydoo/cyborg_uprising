@@ -74,7 +74,9 @@ class Constants {
     public static final String ME = "ME";
     public static final String OPPONENT = "OPPONENT";
     public static final String NEUTRAL = "NEUTRAL";
-    public static final String WAIT = "WAIT";
+    public static final String WAIT_COMMAND = "WAIT";
+    public static final String FACTORY = "FACTORY";
+    public static final String TROOP = "TROOP";
 
     static Map<Integer,String> ownerMap = Stream.of(
                     new AbstractMap.SimpleEntry<>(1,ME),
@@ -108,6 +110,10 @@ class EntityArguments {
 
 class StrategyBuilder{
 
+    public List<Factory> findAttackingFactories(List<Factory> factories){
+        return factories.stream().filter( f -> f.numCyborgs > 3).collect(Collectors.toList());
+    }
+
     public Factory findFactoryWithMostCyborgs(List<Factory> factories){
         if (factories.isEmpty()) throw new AssertionError("Factories collection is empty");
         Factory mostCyborgs =  factories.stream()
@@ -122,22 +128,37 @@ class StrategyBuilder{
         if(Objects.isNull(factory)) throw new AssertionError("Factory is null");
         if (enemyFactories.isEmpty()) throw new AssertionError("Factories collection is empty");
 
-        List<Integer> myFactoryIds = myFactories.stream().map(Factory::getId).collect(Collectors.toList());
-        List<Link> linksToEnemies = factory.links.stream().filter( l -> !myFactoryIds.contains(l.factory1) || !myFactoryIds.contains(l.factory2) ).collect(Collectors.toList());
-
-        Link closestLink = linksToEnemies.stream()
-                .min( Comparator.comparing(Link::getDistance))
-                .orElse(factory.links.get(0));
+        List<Integer> myFactoryIds = getMyFactoryIds(myFactories);
+        List<Link> linksToEnemies = getLinksToEnemies(factory, myFactoryIds);
+        Link closestLink = closestLink(linksToEnemies);
 
         System.err.println("Closest link to factory " + factory.id + " is " + closestLink.factory1 + " " + closestLink.factory2 + " " + closestLink.distance );
 
-        Factory closestEnemy = enemyFactories.stream()
-                .filter( f -> f.id == closestLink.factory1 || f.id == closestLink.factory2 )
-                .findFirst()
-                .orElse(enemyFactories.get(0));
+        Factory closestEnemy = getClosestEnemy(enemyFactories, closestLink);
 
         System.err.println("Closest enemy factory to target is " + closestEnemy.id + " with a distance of " + closestLink.distance);
         return closestEnemy;
+    }
+
+    private Factory getClosestEnemy(List<Factory> enemyFactories, Link closestLink){
+        return enemyFactories.stream()
+                .filter( f -> f.id == closestLink.factory1 || f.id == closestLink.factory2 )
+                .findFirst()
+                .orElse(enemyFactories.get(0));
+    }
+
+    private List<Link> getLinksToEnemies(Factory factory, List<Integer> myFactoryIds){
+        return factory.links.stream().filter( l -> !myFactoryIds.contains(l.factory1) || !myFactoryIds.contains(l.factory2) ).collect(Collectors.toList());
+    }
+
+    private Link closestLink(List<Link> links){
+        return links.stream()
+                .min( Comparator.comparing(Link::getDistance))
+                .orElse(links.get(0));
+    }
+
+    private List<Integer> getMyFactoryIds(List<Factory> factories){
+        return factories.stream().map(Factory::getId).collect(Collectors.toList());
     }
 
 }
@@ -169,21 +190,29 @@ class GameController {
         StrategyBuilder strategyBuilder = new StrategyBuilder();
 
         if( context.myFactories.isEmpty()){
-            return Constants.WAIT;
+            return Constants.WAIT_COMMAND;
         }
 
-        Factory factory = strategyBuilder.findFactoryWithMostCyborgs(context.myFactories);
-        if( Objects.isNull(factory) || context.enemyOrNeutralFactories.isEmpty() ){
-            return Constants.WAIT;
-        }
-        Factory targetFactory = strategyBuilder.findClosestFactory(factory, context.myFactories, context.enemyOrNeutralFactories );
-
-        if( Objects.isNull(targetFactory)){
-            return Constants.WAIT;
-        } else {
-            return "MOVE " + factory.id + " " + targetFactory.id + " " +  Math.max(targetFactory.numCyborgs, 2);
+        List<Factory> attackingFactories = strategyBuilder.findAttackingFactories(context.myFactories);
+        if( attackingFactories.isEmpty()){
+            return Constants.WAIT_COMMAND;
         }
 
+        List<String> commands = new ArrayList<>();
+        attackingFactories.stream().forEach( factory -> {
+            if (Objects.isNull(factory) || context.enemyOrNeutralFactories.isEmpty()) {
+                commands.add(Constants.WAIT_COMMAND);
+            }
+            Factory targetFactory = strategyBuilder.findClosestFactory(factory, context.myFactories, context.enemyOrNeutralFactories);
+
+            if (Objects.isNull(targetFactory)) {
+                commands.add(Constants.WAIT_COMMAND);
+            } else {
+                commands.add("MOVE " + factory.id + " " + targetFactory.id + " " + Math.max(targetFactory.numCyborgs, 2));
+            }
+        });
+
+        return commands.stream().collect(Collectors.joining(";"));
     }
 
     private Context createContext(){
@@ -263,10 +292,10 @@ class GameController {
     }
 
     private boolean isFactory(String entityType){
-        return entityType.equalsIgnoreCase("FACTORY");
+        return entityType.equalsIgnoreCase(Constants.FACTORY);
     }
     private boolean isTroop(String entityType){
-        return entityType.equalsIgnoreCase("TROOP");
+        return entityType.equalsIgnoreCase(Constants.TROOP);
     }
 }
 
