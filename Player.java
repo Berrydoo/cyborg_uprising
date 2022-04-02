@@ -75,37 +75,41 @@ class EntityArguments {
 
 }
 
-class Player {
+class GameController {
 
-    public static void main(String[] args) {
-
-            Scanner in = new Scanner(System.in);
-            Context context = createContext(in);
-            context.links = createLinks(context, in);
-
-            // game loop
-            while (in.hasNext() || in.hasNextInt()) {
-                context.entityCount = getEntityCount(in); // the number of entities (e.g. factories and troops)
-                context = getEntities(context, in);
-
-                // Any valid action, such as "WAIT" or "MOVE source destination cyborgs"
-                System.out.println(getAction(context));
-            }
-
+    private final Scanner in;
+    public GameController(Scanner in){
+        this.in = in;
     }
 
-    public static String getAction(Context context){
+    public void run(){
+
+        Context context = createContext(in);
+        context.links = createLinks(context, in);
+
+        // game loop
+        while (in.hasNext() || in.hasNextInt()) {
+            context.entityCount = getEntityCount(in); // the number of entities (e.g. factories and troops)
+            getEntities(context, in);
+
+            // Any valid action, such as "WAIT" or "MOVE source destination cyborgs"
+            System.out.println(getAction(context));
+        }
+    }
+
+
+    private String getAction(Context context){
         return "WAIT";
     }
 
-    public static Context createContext(Scanner in){
+    private Context createContext(Scanner in){
         Context context = new Context();
         context.factoryCount = in.nextInt();
         context.linkCount = in.nextInt();
         return context;
     }
 
-    public static List<Link> createLinks(Context context, Scanner in){
+    private List<Link> createLinks(Context context, Scanner in){
         List<Link> links = new ArrayList<>(context.linkCount);
         for (int i = 0; i < context.linkCount; i++) {
             int factory1 = in.nextInt();
@@ -116,16 +120,15 @@ class Player {
         return links;
     }
 
-    public static int getEntityCount(Scanner in){
+    private int getEntityCount(Scanner in){
         return in.nextInt();
     }
 
-    public static Context getEntities(Context context, Scanner in){
+    private void getEntities(Context context, Scanner in){
         List<Factory> factories = new ArrayList<>();
         List<Troop> troops = new ArrayList<>();
 
         for (int i = 0; i < context.entityCount; i++) {
-
             EntityArguments args = new EntityArguments(in.nextInt(),in.next(),in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt() );
 
             if ( isFactory(args.entityType)){
@@ -137,7 +140,6 @@ class Player {
         context.factoryList = factories;
         context.troopList = troops;
 
-        return context;
     }
 
     private static Factory createFactory(EntityArguments args){
@@ -170,4 +172,15 @@ class Player {
     private static boolean isTroop(String entityType){
         return entityType.equalsIgnoreCase("TROOP");
     }
+}
+
+class Player {
+
+    public static void main(String[] args) {
+
+            Scanner in = new Scanner(System.in);
+            GameController controller = new GameController(in);
+            controller.run();
+    }
+
 }
