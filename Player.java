@@ -8,7 +8,8 @@ class Context {
     int entityCount;
     List<Factory> enemyOrNeutralFactories;
     List<Factory> myFactories;
-    List<Troop> troopList;
+    List<Troop> enemyTroops;
+    List<Troop> friendlyTroops;
     List<Link> links;
 }
 
@@ -184,8 +185,70 @@ class GameController {
         }
     }
 
-
     private String getAction(){
+
+        // get targets by how many troops they need in ascending order (present there + accum by arrival - minus outgoing)
+        List<Target> targets =  context.enemyOrNeutralFactories.stream().map(
+                factory -> {
+                    Target target = new Target();
+                    target.troopsInbound = Utility.countTroopsGoingTo(factory.id, context.friendlyTroops);
+                    target.troopsPresent = factory.numCyborgs;
+                    target.production = factory.factoryProduction;
+                    target.factory = factory;
+                    return target;
+                }
+        ).collect(Collectors.toList());
+        System.err.println("# Targets: " + targets.size());
+
+        // get sources by how many troops are available (present - incoming - reserve)
+        List<Source> sources = context.myFactories.stream().map(
+                factory -> {
+                    Source source = new Source();
+                    source.troopsInbound = Utility.countTroopsGoingTo(factory.id, context.enemyTroops);
+                    source.troopsPresent = factory.numCyborgs;
+                    source.factory = factory;
+                    return source;
+                }
+        ).collect(Collectors.toList());
+        System.err.println("# Sources: " + sources.size());
+
+        targets.sort(Comparator.comparingInt(Target::getBaseNumberRequired));
+        sources.sort(Comparator.comparingInt(Source::getBaseNumberAvailable).reversed());
+
+        return createAttacks(sources, targets);
+
+    }
+
+    private String createAttacks(List<Source> sources, List<Target> targets){
+
+        if(sources.isEmpty() || targets.isEmpty()){
+            return Constants.WAIT_COMMAND;
+        }
+
+        List<String> commands = new ArrayList<>();
+
+        for(Source source : sources){
+            int troopsAvailable = Utility.getTotalSourceTroops(sources);
+            System.err.println("# troops available: " + troopsAvailable);
+            if(troopsAvailable > 1 ) {
+                for (Target target : targets) {
+                    if( source.getBaseNumberAvailable() > 0){
+                        System.err.println("Source: " + source.factory.id + " " + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " " + target.getBaseNumberRequired() );
+                        String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
+                        commands.add(command);
+                    } else {
+                        System.err.println("Source: " + source.factory.id + " has zero troops available" );
+                    }
+                }
+            } else {
+                return Constants.WAIT_COMMAND;
+            }
+        }
+
+        return commands.stream().collect(Collectors.joining(";"));
+    }
+
+    private String getAction2(){
 
         StrategyBuilder strategyBuilder = new StrategyBuilder();
 
@@ -240,7 +303,8 @@ class GameController {
     private void getEntities(){
         List<Factory> enemyOrNeutral = new ArrayList<>();
         List<Factory> myFactories = new ArrayList<>();
-        List<Troop> troops = new ArrayList<>();
+        List<Troop> enemyTroops = new ArrayList<>();
+        List<Troop> friendlyTroops = new ArrayList<>();
 
         for (int i = 0; i < this.context.entityCount; i++) {
             EntityArguments args = new EntityArguments(in.nextInt(),in.next(),in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt(), in.nextInt() );
@@ -254,12 +318,18 @@ class GameController {
                     enemyOrNeutral.add(factory);
                 }
             } else if(isTroop(args.entityType)){
-                troops.add(createTroop(args));
+                Troop troop = createTroop(args);
+                if(troop.owner.equalsIgnoreCase(Constants.ME)){
+                    friendlyTroops.add(troop);
+                } else {
+                    enemyTroops.add(troop);
+                }
             }
         }
         context.myFactories = myFactories;
         context.enemyOrNeutralFactories = enemyOrNeutral;
-        context.troopList = troops;
+        context.enemyTroops = enemyTroops;
+        context.friendlyTroops = friendlyTroops;
     }
 
     private Factory createFactory(EntityArguments args){
@@ -299,6 +369,70 @@ class GameController {
     }
 }
 
+class Target {
+    int troopsInbound;
+    int troopsPresent;
+    int production;
+    Factory factory;
+
+    public int getBaseNumberRequired(){
+        return troopsPresent - troopsInbound + 1;
+    }
+}
+
+class Source {
+    int troopsInbound;
+    int troopsPresent;
+    int production;
+    int troopsSent;
+    Factory factory;
+
+    public int getBaseNumberAvailable(){
+        return Math.max( troopsPresent - troopsInbound - troopsSent - 1, 0);
+    }
+}
+
+class Utility {
+    private Utility(){}
+
+    public static int countTroopsGoingTo(int targetId, List<Troop> troopList){
+
+        return troopList.stream()
+                .filter( troop -> troop.factoryTarget == targetId)
+                .map( troop -> troop.numInTroop)
+                .reduce( (cum, temp) -> cum + temp )
+                .orElse(0);
+
+    }
+
+    public static int getDistanceFromTo(int fromId, int toId, List<Link> links){
+        Optional<Link> targetLink = links.stream()
+                .filter( link -> {
+                    return (link.factory1 == fromId && link.factory2 == toId)
+                            || (link.factory2 == fromId && link.factory1 == toId);
+                }).findFirst();
+
+        return targetLink.map(link -> link.distance).orElse(100);
+
+    }
+
+    public static int getTotalSourceTroops(List<Source> sources){
+        return sources.stream()
+                .map( source -> source.getBaseNumberAvailable() )
+                .reduce( (cum, temp) -> cum + temp).orElse(0);
+    }
+
+    public static int getTroopCountToSend(Source source, Target target){
+        if( source.getBaseNumberAvailable() > 0 && target.getBaseNumberRequired() > 0){
+            int sending = Math.min(source.getBaseNumberAvailable(), target.getBaseNumberRequired());
+            source.troopsSent += sending;
+            target.troopsInbound += sending;
+            return sending;
+        } else {
+            return 0;
+        }
+    }
+}
 class Player {
 
     public static void main(String[] args) {
