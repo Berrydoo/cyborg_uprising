@@ -260,36 +260,6 @@ class GameController {
         return commands.stream().collect(Collectors.joining(";"));
     }
 
-    private String getAction2(){
-
-        StrategyBuilder strategyBuilder = new StrategyBuilder();
-
-        if( context.myFactories.isEmpty()){
-            return Constants.WAIT_COMMAND;
-        }
-
-        List<Factory> attackingFactories = strategyBuilder.findAttackingFactories(context.myFactories);
-        if( attackingFactories.isEmpty()){
-            return Constants.WAIT_COMMAND;
-        }
-
-        List<String> commands = new ArrayList<>();
-        attackingFactories.stream().forEach( factory -> {
-            if (Objects.isNull(factory) || context.enemyOrNeutralFactories.isEmpty()) {
-                commands.add(Constants.WAIT_COMMAND);
-            }
-            Factory targetFactory = strategyBuilder.findClosestFactory(factory, context.myFactories, context.enemyOrNeutralFactories);
-
-            if (Objects.isNull(targetFactory)) {
-                commands.add(Constants.WAIT_COMMAND);
-            } else {
-                commands.add("MOVE " + factory.id + " " + targetFactory.id + " " + Math.max(targetFactory.numCyborgs, 2));
-            }
-        });
-
-        return commands.stream().collect(Collectors.joining(";"));
-    }
-
     private Context createContext(){
         this.context = new Context();
         context.factoryCount = in.nextInt();
