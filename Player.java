@@ -109,61 +109,6 @@ class EntityArguments {
 
 }
 
-class StrategyBuilder{
-
-    public List<Factory> findAttackingFactories(List<Factory> factories){
-        return factories.stream().filter( f -> f.numCyborgs > 3).collect(Collectors.toList());
-    }
-
-    public Factory findFactoryWithMostCyborgs(List<Factory> factories){
-        if (factories.isEmpty()) throw new AssertionError("Factories collection is empty");
-        Factory mostCyborgs =  factories.stream()
-                .max(Comparator.comparing(Factory::getNumCyborgs))
-                .orElse(factories.get(0));
-
-        System.err.println("My factory with most cyborgs is: " + mostCyborgs.id + " which has " + mostCyborgs.numCyborgs + " borgs");
-        return mostCyborgs;
-    }
-
-    public Factory findClosestFactory(Factory factory, List<Factory> myFactories, List<Factory> enemyFactories){
-        if(Objects.isNull(factory)) throw new AssertionError("Factory is null");
-        if (enemyFactories.isEmpty()) throw new AssertionError("Factories collection is empty");
-
-        List<Integer> myFactoryIds = getMyFactoryIds(myFactories);
-        List<Link> linksToEnemies = getLinksToEnemies(factory, myFactoryIds);
-        Link closestLink = closestLink(linksToEnemies);
-
-        System.err.println("Closest link to factory " + factory.id + " is " + closestLink.factory1 + " " + closestLink.factory2 + " " + closestLink.distance );
-
-        Factory closestEnemy = getClosestEnemy(enemyFactories, closestLink);
-
-        System.err.println("Closest enemy factory to target is " + closestEnemy.id + " with a distance of " + closestLink.distance);
-        return closestEnemy;
-    }
-
-    private Factory getClosestEnemy(List<Factory> enemyFactories, Link closestLink){
-        return enemyFactories.stream()
-                .filter( f -> f.id == closestLink.factory1 || f.id == closestLink.factory2 )
-                .findFirst()
-                .orElse(enemyFactories.get(0));
-    }
-
-    private List<Link> getLinksToEnemies(Factory factory, List<Integer> myFactoryIds){
-        return factory.links.stream().filter( l -> !myFactoryIds.contains(l.factory1) || !myFactoryIds.contains(l.factory2) ).collect(Collectors.toList());
-    }
-
-    private Link closestLink(List<Link> links){
-        return links.stream()
-                .min( Comparator.comparing(Link::getDistance))
-                .orElse(links.get(0));
-    }
-
-    private List<Integer> getMyFactoryIds(List<Factory> factories){
-        return factories.stream().map(Factory::getId).collect(Collectors.toList());
-    }
-
-}
-
 class GameController {
 
     private final Scanner in;
@@ -257,7 +202,7 @@ class GameController {
             }
         }
 
-        return commands.stream().collect(Collectors.joining(";"));
+        return String.join(";", commands);
     }
 
     private Context createContext(){
@@ -382,7 +327,7 @@ class Utility {
         return troopList.stream()
                 .filter( troop -> troop.factoryTarget == targetId)
                 .map( troop -> troop.numInTroop)
-                .reduce( (cum, temp) -> cum + temp )
+                .reduce(Integer::sum)
                 .orElse(0);
 
     }
@@ -400,8 +345,8 @@ class Utility {
 
     public static int getTotalSourceTroops(List<Source> sources){
         return sources.stream()
-                .map( source -> source.getBaseNumberAvailable() )
-                .reduce( (cum, temp) -> cum + temp).orElse(0);
+                .map(Source::getBaseNumberAvailable)
+                .reduce(Integer::sum).orElse(0);
     }
 
     public static int getTroopCountToSend(Source source, Target target){
