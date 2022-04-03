@@ -95,6 +95,10 @@ class Troop extends Entity {
     }
 }
 
+class Bomb extends Entity {
+
+}
+
 class Constants {
 
     private Constants(){}
@@ -158,7 +162,6 @@ class GameController {
 
     private String getAction(){
 
-        // get targets by how many troops they need in ascending order (present there + accum by arrival - minus outgoing)
         List<Target> targets =  context.enemyOrNeutralFactories.stream().map(
                 factory -> {
                     Target target = new Target();
@@ -171,7 +174,6 @@ class GameController {
         ).collect(Collectors.toList());
         System.err.println("# Targets: " + targets.size());
 
-        // get sources by how many troops are available (present - incoming - reserve)
         List<Source> sources = context.myFactories.stream().map(
                 factory -> {
                     Source source = new Source();
@@ -183,11 +185,6 @@ class GameController {
         ).collect(Collectors.toList());
         System.err.println("# Sources: " + sources.size());
 
-        Comparator<Target> compareByProdThenRqd = Comparator
-                .comparing(Target::getProduction).reversed()
-                .thenComparing(Target::getBaseNumberRequired);
-
-        targets.sort(compareByProdThenRqd);
         sources.sort(Comparator.comparingInt(Source::getBaseNumberAvailable).reversed());
 
         return createAttacks(sources, targets);
@@ -203,6 +200,15 @@ class GameController {
         List<String> commands = new ArrayList<>();
 
         for(Source source : sources){
+
+            targets.forEach(target -> target.distance = Utility.getDistanceFromTo(source.factory.id, target.factory.id, context.links));
+
+            Comparator<Target> compareByProdThenRqd = Comparator
+                    .comparing(Target::getProduction).reversed()
+                    .thenComparing(Target::getBaseNumberRequired)
+                    .thenComparing(Target::getDistance);
+
+            targets.sort(compareByProdThenRqd);
 
             int totalTargets = targets.size();
             int targetIndex = 0;
@@ -251,7 +257,7 @@ class GameController {
         return targetIndex == totalTargets-1;
     }
     private boolean isBombAppropriate(Source source, Target target){
-        return source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25 && target.factory.factoryProduction > 0;
+        return source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25 && target.production > 0;
     }
     private String sendBomb(Source source, Target target){
         System.err.println("BOMB: Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
@@ -358,12 +364,23 @@ class GameController {
     }
 }
 
+enum Focus {
+    ATTACK,
+    DEFEND,
+    SEEK_SUPPORT,
+    SEND_SUPPORT
+}
+
 class Target {
     int troopsInbound;
     int troopsPresent;
     int production;
+    int distance;
     Factory factory;
 
+    public int getDistance(){
+        return distance;
+    }
     public int getProduction(){
         return production;
     }
@@ -377,6 +394,7 @@ class Source {
     int troopsPresent;
     int production;
     int troopsSent;
+    Focus focus;
     Factory factory;
 
     public int getBaseNumberAvailable(){
