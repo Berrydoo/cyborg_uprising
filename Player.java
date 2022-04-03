@@ -233,9 +233,15 @@ class GameController {
             if(troopsAvailable > 1 ) {
                 for (Target target : targets) {
                     if( source.getBaseNumberAvailable() > 0){
-                        System.err.println("Source: " + source.factory.id + " " + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " " + target.getBaseNumberRequired() );
-                        String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
-                        commands.add(command);
+                        if( targets.size() < 3){
+                            System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+                            String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target);
+                            commands.add(command);
+                        }else {
+                            System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+                            String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
+                            commands.add(command);
+                        }
                     } else {
                         System.err.println("Source: " + source.factory.id + " has zero troops available" );
                     }
@@ -423,8 +429,19 @@ class Utility {
     }
 
     public static int getTroopCountToSend(Source source, Target target){
-        if( source.getBaseNumberAvailable() > 0 && target.getBaseNumberRequired() > 0){
+        if( source.getBaseNumberAvailable() > 0 && target.getBaseNumberRequired() > 0 ){
             int sending = Math.min(source.getBaseNumberAvailable(), target.getBaseNumberRequired());
+            source.troopsSent += sending;
+            target.troopsInbound += sending;
+            return sending;
+        } else {
+            return 0;
+        }
+    }
+
+    public static int getMaxTroopsToSend(Source source, Target target){
+        if( source.getBaseNumberAvailable() > 0 && target.getBaseNumberRequired() > 0 ){
+            int sending = source.getBaseNumberAvailable();
             source.troopsSent += sending;
             target.troopsInbound += sending;
             return sending;
