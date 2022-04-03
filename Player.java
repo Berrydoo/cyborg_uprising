@@ -238,9 +238,15 @@ class GameController {
                             String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target);
                             commands.add(command);
                         }else {
-                            System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
-                            String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
-                            commands.add(command);
+                            if(source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25){
+                                System.err.println("BOMB: Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+                                String command = "BOMB " + source.factory.id + " " + target.factory.id;
+                                commands.add(command);
+                            } else {
+                                System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+                                String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
+                                commands.add(command);
+                            }
                         }
                     } else {
                         System.err.println("Source: " + source.factory.id + " has zero troops available" );
