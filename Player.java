@@ -60,6 +60,19 @@ class Factory extends Entity {
     public int getNumCyborgs(){
         return numCyborgs;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Entity entity = (Entity) o;
+        return id == entity.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
 
 class Troop extends Entity {
@@ -67,6 +80,19 @@ class Troop extends Entity {
     int factoryTarget;
     int numInTroop;
     int turnsBeforeArrival;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Entity entity = (Entity) o;
+        return id == entity.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
 
 class Constants {
@@ -170,39 +196,25 @@ class GameController {
 
     private String createAttacks(List<Source> sources, List<Target> targets){
 
-        if(sources.isEmpty() || targets.isEmpty()){
+        if( sourcesOrTargetsAreEmpty(sources.isEmpty(),targets.isEmpty())){
             return Constants.WAIT_COMMAND;
         }
 
         List<String> commands = new ArrayList<>();
 
         for(Source source : sources){
-            int troopsAvailable = Utility.getTotalSourceTroops(sources);
-            System.err.println("# troops available: " + troopsAvailable);
+
             int totalTargets = targets.size();
             int targetIndex = 0;
-            if(troopsAvailable > 1 ) {
+
+            if( troopsAvailableAmongAllSources(sources) ) {
                 for (Target target : targets) {
-                    targetIndex++;
-                    if( source.getBaseNumberAvailable() > 0){
-                        if( targets.size() < 3 || targetIndex == totalTargets-1){
-                            System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
-                            String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target);
-                            commands.add(command);
-                        }else {
-                            if(source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25 && target.factory.factoryProduction > 0){
-                                System.err.println("BOMB: Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
-                                String command = "BOMB " + source.factory.id + " " + target.factory.id;
-                                commands.add(command);
-                            } else {
-                                System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
-                                String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
-                                commands.add(command);
-                            }
-                        }
+                    if( sourceCanAttack(source)){
+                        commands.add(attack(totalTargets, targetIndex, source, target));
                     } else {
                         System.err.println("Source: " + source.factory.id + " has zero troops available" );
                     }
+                    targetIndex++;
                 }
             } else {
                 return Constants.WAIT_COMMAND;
@@ -211,6 +223,49 @@ class GameController {
 
         return String.join(";", commands);
     }
+
+    private boolean sourcesOrTargetsAreEmpty(boolean sourcesIsEmpty, boolean targetsIsEmpty){
+        return sourcesIsEmpty || targetsIsEmpty;
+    }
+    private boolean troopsAvailableAmongAllSources(List<Source> sources){
+        int troopsAvailable = Utility.getTotalSourceTroops(sources);
+        System.err.println("# troops available: " + troopsAvailable);
+        return troopsAvailable > 1;
+    }
+    private boolean sourceCanAttack(Source source){
+        return source.getBaseNumberAvailable() > 0;
+    }
+    private String attack(int totalTargets, int targetIndex, Source source, Target target  ){
+        if( isLastFewFactories(totalTargets) || isLastTarget(targetIndex,totalTargets)){
+            return sendMaxAvailable(source, target);
+        }else if( isBombAppropriate(source, target)){
+            return sendBomb(source, target);
+        } else {
+            return sendMinimumRequired(source, target);
+        }
+    }
+    private boolean isLastFewFactories(int targetsSize){
+        return targetsSize < 3;
+    }
+    private boolean isLastTarget(int targetIndex, int totalTargets){
+        return targetIndex == totalTargets-1;
+    }
+    private boolean isBombAppropriate(Source source, Target target){
+        return source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25 && target.factory.factoryProduction > 0;
+    }
+    private String sendBomb(Source source, Target target){
+        System.err.println("BOMB: Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+        return "BOMB " + source.factory.id + " " + target.factory.id;
+    }
+    private String sendMinimumRequired(Source source, Target target){
+        System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+        return "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getTroopCountToSend(source, target);
+    }
+    private String sendMaxAvailable(Source source, Target target){
+        System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
+        return ("MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target));
+    }
+
 
     private Context createContext(){
         this.context = new Context();
@@ -344,10 +399,8 @@ class Utility {
 
     public static int getDistanceFromTo(int fromId, int toId, List<Link> links){
         Optional<Link> targetLink = links.stream()
-                .filter( link -> {
-                    return (link.factory1 == fromId && link.factory2 == toId)
-                            || (link.factory2 == fromId && link.factory1 == toId);
-                }).findFirst();
+                .filter( link -> (link.factory1 == fromId && link.factory2 == toId) || (link.factory2 == fromId && link.factory1 == toId) )
+                .findFirst();
 
         return targetLink.map(link -> link.distance).orElse(100);
 
