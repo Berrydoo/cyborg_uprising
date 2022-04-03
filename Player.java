@@ -157,7 +157,11 @@ class GameController {
         ).collect(Collectors.toList());
         System.err.println("# Sources: " + sources.size());
 
-        targets.sort(Comparator.comparingInt(Target::getBaseNumberRequired));
+        Comparator<Target> compareByProdThenRqd = Comparator
+                .comparing(Target::getProduction).reversed()
+                .thenComparing(Target::getBaseNumberRequired);
+
+        targets.sort(compareByProdThenRqd);
         sources.sort(Comparator.comparingInt(Source::getBaseNumberAvailable).reversed());
 
         return createAttacks(sources, targets);
@@ -175,10 +179,13 @@ class GameController {
         for(Source source : sources){
             int troopsAvailable = Utility.getTotalSourceTroops(sources);
             System.err.println("# troops available: " + troopsAvailable);
+            int totalTargets = targets.size();
+            int targetIndex = 0;
             if(troopsAvailable > 1 ) {
                 for (Target target : targets) {
+                    targetIndex++;
                     if( source.getBaseNumberAvailable() > 0){
-                        if( targets.size() < 3){
+                        if( targets.size() < 3 || targetIndex == totalTargets-1){
                             System.err.println("Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
                             String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target);
                             commands.add(command);
@@ -302,6 +309,9 @@ class Target {
     int production;
     Factory factory;
 
+    public int getProduction(){
+        return production;
+    }
     public int getBaseNumberRequired(){
         return troopsPresent - troopsInbound + 1;
     }
