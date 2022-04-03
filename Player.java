@@ -238,7 +238,7 @@ class GameController {
                             String command = "MOVE " + source.factory.id + " " + target.factory.id + " " + Utility.getMaxTroopsToSend(source, target);
                             commands.add(command);
                         }else {
-                            if(source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25){
+                            if(source.getBaseNumberAvailable() < 3 && target.getBaseNumberRequired() > 25 && target.factory.factoryProduction > 0){
                                 System.err.println("BOMB: Source: " + source.factory.id + " Avl:" + source.getBaseNumberAvailable() + " Target: " + target.factory.id + " Rqd:" + target.getBaseNumberRequired() );
                                 String command = "BOMB " + source.factory.id + " " + target.factory.id;
                                 commands.add(command);
